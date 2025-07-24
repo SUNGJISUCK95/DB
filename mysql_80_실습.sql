@@ -548,3 +548,270 @@ limit 3; -- 출력기준 3개만 출력
 SELECT * FROM employee
 ORDER BY salary DESC
 limit 5;
+
+/*****************************************************
+	조인(JOIN) : 두개 이상의 테이블을 묶어서 SQL을 진행
+    ERD(Entity Relationship Diagrem) : 데이터베이스 구조도(설계도)
+    - 데이터 모델링 : 정규화 과정
+    
+    ** ANSI SQL : 모든 데이터베이스 시스템들의 표준 SQL
+    조인(JOIN) 종류
+    (1) CROSS JOIN(오라클에서는 CATEISIAN JOIN이라고 부름) - 합집합 : 테이블들의 데이터 전체를 JOIN - 테이블A(10개 데이터) * 테이블B(10개 데이터) = (100개 데이터)
+    (2) INNER JOIN(NATURAL JOIN) - 교집합 : 두 개 이상의 테이블을 JOIN 연결고리를 통해 JOIN 실행
+    (3) OUTER JOIN - 차집합 : INNER JOIN + 선택한 테입블의 JOIN 제외 ROW 포함
+    (4) SELF JOIN : 한 테이블을 두 개 테이블처럼 JOIN 실행
+    
+*****************************************************/
+USE hrbd2019;
+SELECT database();
+SELECT * FROM employee;
+SELECT * FROM department;
+
+-- CROSS JOIN
+SELECT *
+FROM employee, department; -- ,로 JOIN 가능 (전통 방식)
+
+SELECT *
+FROM employee CROSS JOIN department; -- C++에서는 이런식으로 선언해줘야 JOIN 가능 (ansi 타입 방식)
+-- ※ 개인적으로 선언해주는게 안전하다고 봄
+
+--
+SELECT * FROM vacation; -- 102
+
+-- 사원, 부서, 휴가 테이블 CROSS JOIN : 20 * 7 * 102
+SELECT count(*) 
+FROM 
+	employee 
+    CROSS JOIN department 
+    CROSS JOIN vacation;
+ 
+ -- INNER JOIN
+ SELECT *
+ FROM
+	employee
+    INNER JOIN department
+WHERE employee.dept_id = department.dept_id
+ORDER BY emp_id;
+
+-- 사원테이블, 부서테이블, 본부테이블 INNER JOIN 
+SELECT *
+FROM 
+	employee AS e
+    INNER JOIN department AS d
+    INNER JOIN unit AS u 
+WHERE -- 또는 ON 
+	e.dept_id = d.dept_id 
+	AND d.unit_id = u.unit_id
+ORDER BY e.emp_id;
+
+-- 사원테이블, 부서테이블, 본부테이블, 휴가테이블 INNER JOIN 
+SELECT *
+FROM 
+	employee AS e
+    INNER JOIN department AS d
+    INNER JOIN unit AS u 
+    INNER JOIN vacation AS v 
+WHERE -- 또는 ON 	
+	e.dept_id = d.dept_id 
+	AND d.unit_id = u.unit_id    
+    AND e.emp_id = v.emp_id
+ORDER BY e.emp_id;
+
+-- 모든 사원들의 사번, 사원명, 부서아이디, 부서명, 입사일, 급여를 조회
+SELECT 
+	e.emp_id, 
+    e.emp_name, 
+    e.dept_id, 
+    d.dept_name, 
+    e.hire_date, 
+    e.salary
+FROM 
+	employee AS e 
+	INNER JOIN department AS d
+WHERE e.dept_id = d.dept_id;
+
+-- 영업부에 속한 사원들의 사번, 사원명, 입사일, 퇴사일, 폰번호, 급여, 부서아이디, 부서명 조회
+SELECT 
+	e.emp_id, 
+    e.emp_name, 
+    e.hire_date,
+    e.retire_date,
+    e.phone,
+    e.salary,
+	e.dept_id,
+	d.dept_name
+FROM 
+	employee AS e 
+	INNER JOIN department AS d
+WHERE 
+	e.dept_id = d.dept_id
+	AND d.dept_name = "영업"
+ORDER BY e.emp_id;
+
+-- 인사과에 속한 사원들 중에 휴가를 사용한 사원들의 내역을 조회
+SELECT *
+FROM 
+	employee AS e 
+	INNER JOIN department AS d
+    INNER JOIN vacation AS v
+WHERE 
+	e.dept_id = d.dept_id
+    AND e.emp_id = v.emp_id
+	AND d.dept_name = "인사"
+ORDER BY e.emp_id;
+
+-- 영업부서 사원의 사원명, 폰번호, 부서명, 휴가사용 이유 조회
+-- 휴가 사용 이유가 "두통"인 사원, 소속본부 조회
+SELECT 
+	e.emp_name,
+    e.phone,
+    d.dept_name,
+    v.reason,
+    u.unit_name
+FROM
+	employee AS e
+	INNER JOIN department AS d
+    INNER JOIN vacation AS v
+    INNER JOIN unit AS u
+WHERE
+	e.emp_id = v.emp_id
+	AND e.dept_id = d.dept_id
+    AND u.unit_id = d.unit_id
+	AND v.reason = "두통"
+ORDER BY e.emp_id;
+
+-- 2014년부터 2016년까지 입사한 사원들 중에서 퇴사하지 않은 사원들의
+-- 사원 아이디, 사원명, 부서명, 입사일, 소속본부를 조회
+-- 소속본부 기준으로 오름차순 정렬
+SELECT 
+	e.emp_id,
+    e.emp_name,
+    d.dept_name,
+    e.hire_date,
+    u.unit_name
+FROM
+	employee AS e
+    INNER JOIN department AS d
+    INNER JOIN unit AS u
+WHERE
+	e.dept_id = d.dept_id
+    AND u.unit_id = d.unit_id
+	AND left((e.hire_date), 4) >= "2014" AND left((e.hire_date), 4) <= "2016" -- 또는 left((e.hire_date), 4) BETWEEN "2014" AND "2016"
+    AND e.retire_date IS NULL
+ORDER BY u.unit_name ASC;
+
+-- 부서별 총급여, 평균급여, 총휴가사용일수를 조회
+-- 부서명, 부서아이디, 총급여, 평균급여, 휴가사용일수
+SELECT 
+	d.dept_name,
+    d.dept_id,
+	sum(e.salary),
+    avg(e.salary),
+    sum(v.duration)
+FROM
+	employee AS e
+    INNER JOIN department AS d
+    INNER JOIN vacation AS v
+WHERE
+	e.emp_id = v.emp_id
+    AND d.dept_id = e.dept_id
+GROUP BY 
+	d.dept_id, 
+    d.dept_name;
+
+-- 본부별 부서의 휴가사용 일수
+SELECT 
+	u.unit_name,
+	d.dept_name,
+    d.dept_id,
+    sum(v.duration)
+FROM
+	employee AS e
+    INNER JOIN department AS d
+    INNER JOIN vacation AS v
+    INNER JOIN unit AS u
+WHERE
+	e.emp_id = v.emp_id
+    AND d.dept_id = e.dept_id
+    AND u.unit_id = d.unit_id
+GROUP BY 
+	d.dept_id, 
+    d.dept_name,
+    u.unit_name;
+    
+-- OUTER JOIN : INNER JOIN + 조인에서 제외된 ROW(테이블)
+-- 오라클 형식의 OUTER JOIN은 사용불가, ANSI SQL 형식 사용 가능
+-- SELECT [컬럼리스트] 
+-- FROM [테이블1 테이블별칭] LEFT/RIGHT OUTER JOIN 테이블명2 [테이블별칭], ...]
+-- ON [테이블명1.조인컬럼 = 테이블명2.조인컬럼]
+
+-- ** 오라클 형식 OUTER JOIN (MYSQL에서는 사용불가)
+-- SELECT * FROM table1 t1, table t2
+-- WHERE t1.col(+) = t2.col; 
+
+-- 모든 부서의 부서아이디, 부서명, 본부명을 조회
+SELECT d.dept_id, d.dept_name, ifnull(u.unit_name, "협의중") AS unit_name 
+FROM 
+	department AS d
+    LEFT OUTER JOIN unit AS u
+	ON d.unit_id = u.unit_id -- WHERE 사용 불가
+ORDER BY u.unit_name;
+
+-- 본부별, 부서의 휴가사용 일수 조회
+-- 부서의 누락없이 모두 출력
+SELECT DISTINCT
+    u.unit_name,
+    d.dept_name,
+    count(v.duration)    
+FROM
+	employee AS e
+	LEFT OUTER JOIN vacation AS v
+    ON e.emp_id = v.emp_id -- AND가 아니고 ON 사용해야함 -- JOIN 선언 후 ON 작성방식 지켜야 출력가능
+	RIGHT OUTER JOIN department AS d 
+    ON d.dept_id = e.dept_id 
+    LEFT OUTER JOIN unit AS u
+	ON u.unit_id = d.unit_id   
+GROUP BY u.unit_name, d.dept_name    
+ORDER BY u.unit_name DESC;
+
+-- 2017년부터 2018년도까지 입사한 사원들의 사원명, 입사명, 연봉, 부서명 조회해주세요.
+-- 단, 퇴사한 사원들 제외
+-- 소속본부를 모두 조회
+SELECT 
+	e.emp_name,
+    e.hire_date,
+	e.salary,
+    d.dept_name,
+    u.unit_name
+FROM 
+	employee AS e
+    INNER JOIN department AS d
+    ON e.dept_id = d.dept_id
+    LEFT OUTER JOIN unit AS u
+    ON d.unit_id = u.unit_id
+WHERE 
+	left(e.hire_date, 4) BETWEEN "2017" AND "2018"
+    AND e.retire_date IS NULL;
+
+-- SELF JOIN : 자기 자신의 테이블을 JOIN
+-- SELF JOIN은 서브쿼리 형태로 실행하는 경우가 많다.
+-- SELECT [컬럼리스트] FROM [테이블1], [테이블2] WHERE [테이블1.컬럼명] = [테이블2.컬럼명]
+-- 사원테이블을 SELF JOIN
+SELECT 
+	e.emp_id, 
+    e.emp_name,
+    m.emp_id, 
+    m.emp_name
+FROM 
+	employee AS e, 
+    employee AS m
+WHERE e.emp_id = m.emp_id;
+
+-- 서브쿼리 형태
+SELECT 
+	emp_id, 
+    emp_name
+FROM 
+	employee 
+WHERE emp_id = (SELECT emp_id FROM employee WHERE emp_name = "홍길동");
+
