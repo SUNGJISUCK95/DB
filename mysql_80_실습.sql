@@ -1301,3 +1301,502 @@ ROLLBACK;
 
 SELECT * 
 FROM emp;
+
+/**************************************************
+	constraint(제약사항) : 데이터의 무결성 원칙을 적용하기 위한 규칙
+    - unique(유니크 제약) : 중복방지 제약
+    - not null : null 값을 허용하지 않는 제약 :: 화면 구현시 유효성 체크로직과 연동
+    - primary key(기본키) : unique + not null 제약 설정
+    - foreign key(참조키) : 타 테이블의 기본키를 참조하는 컬럼 설정, 
+						  참조하는 기본키의 데이터타입 동일함
+    - default : 데이터 입력 시 기본으로 저장데티어는 값 설정
+    
+    ** 제약사항은 테이블 생성 시 정의 가능함, 또는 테이블 수정으로도 변경, 추가 가능 
+    - create table..., alter table...
+**************************************************/
+USE hrdb2019;
+SELECT database();
+SELECT * FROM information_schema.table_constraints
+WHERE table_schema = "hrdb2019";
+
+DESC employee;
+DESC department;
+
+-- 테이블 생성 : emp_const
+CREATE TABLE emp_const(
+	emp_id    char(4)     PRIMARY KEY, 
+    emp_name  varchar(10) NOT NULL,
+    hire_date date,
+    salary    int
+);
+
+SHOW TABLES;
+DESC emp_const;
+INSERT INTO emp_const(emp_id, emp_name, hire_date, salary)
+	values("s002", "홍길동", curdate(), 1000);
+ 
+INSERT INTO emp_const(emp_id, emp_name)
+	values("s003", "이순신");
+    
+SELECT * FROM emp_const;
+
+DESC emp_const;
+
+-- 테이블 생성 : emp_const2
+CREATE TABLE emp_const2(
+	emp_id     char(5),
+    emp_name   varchar(10) NOT NULL,
+    hire_date  date,
+    salary     int,
+    constraint pk_emp_const2 PRIMARY KEY(emp_id)
+);
+
+SELECT * FROM information_schema.table_constraints
+	WHERE table_name = "emp_const2";
+   
+INSERT INTO emp_const2(emp_id, emp_name, hire_date, salary) -- 실행시 Output에 경고문이 뜨는데 hire_date의 타입이 date여서 curdate()쓰는게 시, 분, 초 안잘라도 되서 효율적인거 쓰라고 뜨는거임
+	values("s001", "홍길동", now(), 1000);
+    
+SELECT * FROM emp_const2;
+
+-- emp_const2 컬럼 추가 : phone, char(13) 컬럼 추가
+ALTER TABLE emp_const2
+	ADD COLUMN phone char(13) NULL; -- 컬럼을 새로 추가하면 맨 뒤에 새로 생긴다.
+    
+-- 홍길동의 폰번호 업데이트 후, phone 컬럼을 NOT NULL 수정
+SET sql_safe_updates = 0; -- 해제
+
+UPDATE emp_const2
+	SET phone = "010-1234-1234"
+    WHERE emp_name = "홍길동";
+
+ALTER TABLE emp_const2
+	MODIFY COLUMN phone char(13) NOT NULL; -- 데이터가 없을 때는 NULL을 NOT NULL로 변경불가
+
+-- phone 컬럼에 unique 제약 추가 (중복된 데이터는 unique가 불가능 UPDATE로 수정해줘야 한다) (NULL은 들어갈 수 있다, 단 1개만)
+ALTER TABLE emp_const2
+	ADD constraint uni_phone unique(phone);
+
+SELECT * FROM information_schema.table_constraints
+	WHERE table_name = "emp_const2";
+
+DESC emp_const2;
+SELECT * FROM emp_const2;
+-- phone 컬럼에 unique 제약 삭제    
+ALTER TABLE emp_const2
+	DROP constraint uni_phone;
+
+DESC emp_const2;
+SELECT * FROM emp_const2;
+
+-- emp 테이블 삭제
+SHOW TABLES;
+DROP TABLE emp;
+DROP TABLE emp2;
+
+-- department 테이블의 복사본 : dept, employee 테이블 복사본 : emp
+CREATE TABLE dept -- 테이블을 복제해도 키는 복제가 되지 않는다.
+AS
+SELECT * 
+FROM department
+WHERE unit_id IS NOT NULL;
+
+SHOW TABLES;
+
+-- dept_id 컬럼에 primary key 제약 추가
+ALTER TABLE dept
+	ADD constraint pk_dept_id PRIMARY KEY(dept_id);
+
+SELECT * FROM information_schema.table_constraints
+WHERE table_name = "dept";
+
+DESC dept;
+SELECT * FROM dept; 
+
+-- 2018년도에 입사한 사원들만 복제
+CREATE TABLE emp
+AS
+SELECT * 
+FROM employee
+WHERE left(hire_date, 4) = "2018";
+
+SHOW TABLES;
+
+-- emp 테이블 제약 사항 추가, primary key(emp_id)
+ALTER TABLE emp
+ADD constraint pk_emp_id PRIMARY KEY(emp_id);
+
+SELECT * FROM information_schema.table_constraints
+WHERE table_name = "emp";
+
+-- foreign key(dept_id) 참조키 제약 추가
+UPDATE emp
+	SET dept_id = "ACC"
+    WHERE emp_id = "S0020";
+
+
+ALTER TABLE emp
+	ADD constraint fk_dept_id FOREIGN KEY(dept_id)
+		REFERENCES dept(dept_id);
+
+SELECT * FROM information_schema.table_constraints
+WHERE table_name = "emp";
+
+-- 홍길동 사원 추가
+INSERT INTO emp
+values("S0001", "홍길동", NULL, "M", curdate(), NULL, "HRD", "010-1234-3456", "hong@test.com", NULL);
+
+INSERT INTO emp
+values("S0002", "홍길동", NULL, "M", curdate(), NULL, "SYS", "010-1234-3456", "hong@test.com", NULL);
+
+DESC dept;
+SELECT * FROM dept;
+
+DESC emp;
+SELECT * FROM emp;
+
+/*
+[학사관리 시스템 설계]
+1. 과목(SUBJECT) 테이블은 
+	컬럼 : SID(과목아이디), SNAME(과목명), SDATE(등록일:년월일 시분초)
+    SID는 기본키, 자동으로 생성한다.
+*/
+CREATE TABLE subject(
+	sid   int         AUTO_INCREMENT PRIMARY KEY, -- AUTO_INCREMENT면 타입은 int여야 한다.
+	sname varchar(20) NOT NULL,
+    sdate datetime
+);
+/*
+2. 학생(STUDENT) 테이블은 반드시 하나이상의 과목을 수강해야 한다. 
+	컬럼 : STID(학생아이디) 기본키, 자동생성
+		SNAME(학생명) 널허용x,
+		GENDER(성별)  문자1자 널허용x,
+		SID(과목아이디),
+		STDATE(등록일자) 년월일 시분초
+*/
+CREATE TABLE student(
+	stid    int         AUTO_INCREMENT PRIMARY KEY, 
+    sname   varchar(20) NOT NULL,
+    gender  char(1),
+    sid     int,
+    stdate  datetime,
+    constraint fk_sid_student FOREIGN KEY(sid)
+							  REFERENCES subject(sid)
+);
+/*
+3. 교수(PROFESSOR) 테이블은 반드시 하나이상의 과목을 강의해야 한다.
+	컬럼 : PID(교수아이디) 기본키, 자동생성
+		NAME(교수명) 널허용x
+		SID(과목아이디),
+		PDATE(등록일자) 년월일 시분초
+*/
+CREATE TABLE professor(
+	pid      int         AUTO_INCREMENT PRIMARY KEY, 
+    name     varchar(20) NOT NULL,
+    sid      int,
+    pdate    datetime,
+	constraint fk_sid_student2 FOREIGN KEY(sid)
+							  REFERENCES subject(sid)
+);
+
+DESC subject;
+DESC student;
+DESC professor;
+
+SELECT * FROM subject;
+SELECT * FROM student;
+SELECT * FROM professor;
+
+-- DROP TABLE subject;
+-- DROP TABLE student;
+-- DROP TABLE professor;
+
+SELECT * FROM information_schema.table_constraints
+	WHERE table_name in ("subject", "student", "professor");
+    
+-- 과목 데이터 추가
+INSERT INTO subject(sname, sdate) values("java", now());
+INSERT INTO subject(sname, sdate) values("mysql", now());
+INSERT INTO subject(sname, sdate) values("html", now());
+INSERT INTO subject(sname, sdate) values("react", now());
+INSERT INTO subject(sname, sdate) values("mode", now());
+
+DESC subject;
+SELECT * FROM subject;
+
+-- 학생 데이터 입력
+INSERT INTO student(sname, gender, sid, stdate)
+	values("아이유", "f", 4, now());
+INSERT INTO student(sname, gender, sid, stdate)
+	values("홍길동", "m", 1, now());
+INSERT INTO student(sname, gender, sid, stdate)
+	values("이순신", "m", 3, now());
+INSERT INTO student(sname, gender, sid, stdate)
+	values("김유신", "m", 3, now());
+INSERT INTO student(sname, gender, sid, stdate)
+	values("박보검", "m", 4, now());
+
+DESC student;
+SELECT * FROM student;
+
+-- 교수 데이터 추가
+INSERT INTO professor(name, sid, pdate) values("스미스", 1, now());
+INSERT INTO professor(name, sid, pdate) values("홍홍", 3, now());
+INSERT INTO professor(name, sid, pdate) values("김철수", 4, now());
+
+DESC professor;
+SELECT * FROM professor;
+
+-- 홍길동 학생이 수강하는 과목을 조회
+-- SUB QUERY
+SELECT sname
+FROM subject
+WHERE sid = (SELECT sid FROM student WHERE sname = "홍길동");
+
+-- JOIN
+SELECT sub.sname
+FROM 
+	subject AS sub
+    INNER JOIN student AS stu
+    ON sub.sid = stu.sid
+WHERE stu.sname = "홍길동";
+
+-- 홍길동 학생이 수강하는 과목과 학생명을 조회
+SELECT sub.sname AS "과목", stu.sname AS "학생명"
+FROM 
+	subject AS sub
+    INNER JOIN student AS stu
+    ON sub.sid = stu.sid
+WHERE stu.sname = "홍길동";
+
+-- 스미스 교수가 강의하는 과목을 조회
+-- SUB QUERY
+SELECT sname
+FROM subject
+WHERE sid = (SELECT sid FROM professor WHERE name = "스미스");
+
+-- JOIN
+SELECT sub.sname
+FROM 
+	subject AS sub
+    INNER JOIN professor AS pro
+    ON sub.sid = pro.sid
+WHERE pro.name = "스미스";
+
+-- java, 안중근 교수 추가
+INSERT INTO professor(name, sid, pdate) values("안중근", 1, now());
+SELECT * FROM professor;
+
+-- java 수업을 강의하는 모든 교수 조회
+-- SUB QUERY
+SELECT name
+FROM professor
+WHERE sid = (SELECT sid FROM subject WHERE sname = "java");
+
+-- JOIN
+SELECT pro.name
+FROM 
+	professor AS pro
+	INNER JOIN subject AS sub
+    ON pro.sid = sub.sid
+WHERE sub.sname = "java";
+
+-- java 수업을 강의하는 교수와 수강신청한 학생들을 조회
+-- 과목아이디, 과목명, 교수명, 학생명
+SELECT 
+	sub.sid, 
+    sub.sname, 
+    pro.name, 
+    stu.sname
+FROM 
+	professor AS pro
+    INNER JOIN student AS stu
+    ON pro.sid = stu.sid
+	INNER JOIN subject AS sub
+    ON stu.sid = sub.sid
+WHERE sub.sname = "java";
+
+-- 간략화
+SELECT 
+	sub.sid, 
+    sub.sname, 
+    pro.name, 
+    stu.sname
+FROM 
+	professor pro, 
+    student stu, 
+    subject sub
+WHERE 
+	pro.sid = sub.sid 
+    AND stu.sid = sub.sid 
+    AND sub.sname = "java";
+
+-- 김철수 교수가 강의하는 과목을 수강하는 학생 조회
+-- 학생명 출력, 서브쿼리
+SELECT stu.sname
+FROM 
+	subject AS sub
+    INNER JOIN professor AS pro
+    ON sub.sid = pro.sid
+    INNER JOIN student AS stu
+    ON sub.sid = stu.sid
+WHERE sub.sid = (SELECT sid FROM professor WHERE name = "김철수");
+
+-- kor, eng, math 과목 컬럼 추가, decimal(10, 2)
+ALTER TABLE student
+ADD COLUMN kor decimal(7, 2) NULL,
+ADD COLUMN eng decimal(7, 2) NULL,
+ADD COLUMN math decimal(7, 2) NULL;
+
+UPDATE student
+SET 
+	kor = 0.0, 
+    eng = 0.0, 
+    math = 0.0
+WHERE 
+	kor IS NULL
+	AND eng IS NULL
+    AND math IS NULL;
+
+SELECT * FROM subject;
+SELECT * FROM student;
+SELECT * FROM professor;
+
+-- Member
+CREATE TABLE member(
+	member_id  int         AUTO_INCREMENT PRIMARY KEY,
+    name       varchar(50) NOT NULL,
+    email      varchar(100) UNIQUE NOT NULL,
+    created_at datetime
+);
+
+-- Product
+CREATE TABLE product(
+	product_id  int            AUTO_INCREMENT PRIMARY KEY,
+    name        varchar(100)   NOT NULL,
+    price       decimal(10, 2) NOT NULL,
+    stock       int        
+);
+
+-- Order
+CREATE TABLE order_table(
+	order_id    int         AUTO_INCREMENT PRIMARY KEY,
+    member_id   int,
+    order_date  datetime,
+    status      varchar(20) ,     
+    constraint fk_member_id FOREIGN KEY(member_id)
+							REFERENCES member(member_id)
+);
+
+-- OrderItem
+CREATE TABLE orderItem(
+	order_item_id    int         AUTO_INCREMENT PRIMARY KEY,
+    order_id         int,
+    product_id       int,
+    quantity         int NOT NULL,
+    constraint fk_order_id FOREIGN KEY(order_id)
+						   REFERENCES order_table(order_id),
+	constraint fk_product_id FOREIGN KEY(product_id)
+						   REFERENCES product(product_id)
+);
+
+DESC member;
+DESC product;
+DESC `order`;
+DESC orderItem;
+
+SELECT * FROM member;
+SELECT * FROM product;
+SELECT * FROM `order`;
+SELECT * FROM orderItem;
+
+/****************************************************
+	회원, 상품, 주문, 주문상세 테이블 생성 및 실습
+****************************************************/
+show tables;
+select * from member;
+insert into member(name, email) values('이순신','lee@naver.com');
+
+desc product;
+insert into product(name, price) 
+values  ('모니터', 1000),
+		('키보드', 2000),
+		('마우스',2500);
+select * from product;
+
+show tables;
+desc `order`;
+select * from `order`;
+insert into `order`(member_id, order_date)
+	values(1, '2024-06-25');
+insert into `order`(member_id, order_date)
+	values(2, '2025-01-25');      
+
+show tables;
+desc orderitem;   
+insert into orderitem(order_id, product_id, quantity) -- , unit_price
+	values(1, 2, 1); -- , 2000
+
+insert into orderitem(order_id, product_id, quantity) -- , unit_price
+	values(2, 3, 2); -- , 2500
+select * from orderitem;
+
+-- 홍길동 고객의 고객명, 이메일, 가입날짜, 주문날짜를 조회
+-- 주문날짜는 년, 월, 일로만 출력
+desc member;
+select m.name, m.email, m.created_at, left(o.order_date, 10) as order_date 
+from member m, `order` o
+where m.member_id = o.member_id
+	and m.name = '홍길동';
+
+select m.name, m.email, m.created_at, left(o.order_date, 10) as order_date 
+from member m inner join `order` o on m.member_id = o.member_id
+where m.name = '홍길동';    
+
+-- 상품별 주문 건수
+-- 상품명, 주문건수 출력
+select p.name, count(*) as count
+from product p, orderitem oi
+where p.product_id = oi.product_id
+group by p.name
+order by count;
+
+select p.name, count(*) as count
+from product p inner join orderitem oi on p.product_id = oi.product_id
+group by p.name
+order by count;
+
+insert into product(name, price) 
+values  ('리모컨', 3000),
+		('USB', 2000);
+select * from product;
+        
+
+-- 상품별 주문 건수(수량), 모든 상품 조회
+select p.name, count(quantity) as count
+from product p left outer join orderitem oi
+				on p.product_id = oi.product_id
+group by p.name;                
+
+-- 회원이 주문한 내역과 제품명 조회
+-- 회원명, 가입날짜, 주문날짜, 주문수량, 제품명, 가격
+select m.name, m.created_at, o.order_date, oi.quantity, p.name, p.price
+from member m, `order` o, orderitem oi, product p
+where m.member_id = o.member_id 
+	and o.order_id = oi.order_id
+    and oi.product_id = p.product_id;
+
+-- 회원이 주문한 내역과 제품명 조회
+-- 회원명, 가입날짜, 주문날짜, 주문수량, 제품명, 가격
+-- 주문되지 않은 모든 제품 출력 
+select t1.name, t1.created_at, t1.order_date, t1.quantity, p.name, p.price
+from (select distinct m.name, m.created_at, o.order_date, oi.quantity, oi.product_id
+		from member m, `order` o, orderitem oi
+		where m.member_id = o.member_id 
+		and o.order_id = oi.order_id) t1 right outer join product p
+										on t1.product_id = p.product_id;
+                                        
+SELECT * FROM member;
+SELECT * FROM `order`;
+SELECT * FROM product;
+SELECT * FROM orderItem;
