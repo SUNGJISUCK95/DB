@@ -1795,8 +1795,299 @@ from (select distinct m.name, m.created_at, o.order_date, oi.quantity, oi.produc
 		where m.member_id = o.member_id 
 		and o.order_id = oi.order_id) t1 right outer join product p
 										on t1.product_id = p.product_id;
+
+-- rno 행번호 추가, 주문날짜(년,월,일), 가격(소수점 생략, 3자리 구분)
+select 
+	row_number() over() AS rno,
+	t1.name, 
+    t1.created_at, 
+    left(t1.order_date, 10) AS order_date, -- 데이터 변환은 무조건 모든 SELECT 작업이 끝난 데이터에 변환하기 
+    t1.quantity, 
+    p.name, 
+    format(floor(p.price), 0) AS price
+from (select distinct m.name, m.created_at, o.order_date, oi.quantity, oi.product_id
+		from member m, `order` o, orderitem oi
+		where m.member_id = o.member_id 
+		and o.order_id = oi.order_id) t1 right outer join product p
+										on t1.product_id = p.product_id;
                                         
 SELECT * FROM member;
 SELECT * FROM `order`;
 SELECT * FROM product;
 SELECT * FROM orderItem;
+
+/**********************************************
+	행번호, 트리거를 이용한 사원번호 생성
+**********************************************/
+USE hedb2019;
+SELECT database();
+
+-- 사원테이블의 사번, 사원명, 입사일, 폰번호, 이메일, 급여 조회
+SELECT 
+	emp_id,
+    emp_name,
+    hire_date,
+    phone,
+    email,
+    salary
+FROM employee;
+
+-- row_number() over(order by 컬럼명 ASC/DESC)
+-- 입사일 : 입사년도, 급여 : 3자리 구분
+SELECT 
+	row_number() over(ORDER BY emp_id) AS rno, -- 행에 넘버 붙임
+	emp_id,
+    emp_name,
+    concat(left(hire_date, 4), "년") AS hire_date,
+    phone,
+    email,
+    concat(format(salary, 0), "원") AS salary
+FROM employee;
+
+-- 석차를 구하는 함수
+SELECT 
+	row_number() over() AS rno, -- emp_id 기준 번호
+    rank() over(ORDER BY salary DESC) AS r, -- salary 기준 순위
+	emp_id, 
+    emp_name,
+    dept_id,
+    salary
+FROM employee
+ORDER BY salary DESC;
+
+-- 트리거 : 프로시저(함수, 메소드)를 호출하는 시작점
+SELECT *
+FROM information_schema.triggers;
+
+-- 트리거 실습 테이블 : 사번 자동 생성 함수
+CREATE TABLE trg_member(
+	mid   char(5),	-- "M0001"
+    name  varchar(10),
+    mdate date
+);
+
+SHOW TABLES;
+
+-- TRIGGER 생성 : 여러개의 SQL문 포함
+/**************** TRIGGRER 시작 ******************/
+DELIMITER $$ -- $$는 SQL이 들어갈 부분
+
+CREATE TRIGGER trh_member_mid
+BEFORE INSERT ON trg_member -- 테이블명
+FOR EACH ROW 
+BEGIN
+    DECLARE max_code INT; -- "M0001" -- 변수 선언
+
+    -- 현재 저장된 값 중 가장 큰 숫자 mid를 가져와서 max_code에 저장
+    -- 현재 저장된 값 중 가장 큰 값을 가져옴
+    SELECT IFNULL(MAX(CAST(mid AS UNSIGNED)), 0) -- cast(mid AS UNSIGNED)로 숫자로 값을 가져옴 -> max()로 가장 큰값 가져옴 -> ifnull() 가장 큰 값이 NULL이면 0으로 치환
+    INTO max_code
+    FROM trg_member;
+
+    -- "M0001" 형식으로 아이디 생성: M + 숫자 형식
+    -- "M0001" 형식으로 아이디 생성, lpad(값, 크기, 채워지는 문자형식) : 0001
+	-- SET NEW.mid = concat("M", lpad(max_code + 1, 5, "0")); -- concat으로 "M"을 채우고 lpad로 "0"을 채움으로 M00001 -> 를 mid에 넣어라 -> 하지만 mid는 char(5)이므로 에러
+    SET NEW.mid = CONCAT('M', LPAD(max_code + 1, 4, '0'));
+END$$
+
+DELIMITER ;
+/**************** TRIGGRER 끝 ******************/
+
+DESC trg_member;
+SELECT * FROM trg_member;
+SELECT * FROM information_schema.triggers;
+
+-- trg_member, mid 컬럼 타입 수정 : varchar(10)
+ALTER TABLE trg_member
+	MODIFY COLUMN mid varchar(10);
+
+INSERT INTO trg_member(name, mdate)
+	values("홍길동", curdate());
+    
+SET sql_safe_updates = 0;
+delete FROM trg_member;
+
+-- 트리거 삭제
+drop trigger trg_member_mid;
+
+-- 
+SHOW TABLES;
+DROP TABLE employee_2016;
+
+-- employee 테이블 구조만 복제
+DESC employee;
+CREATE TABLE employee_stru
+AS 
+SELECT * FROM employee WHERE 1 = 0;
+SHOW TABLES;
+DESC employee_stru;
+SELECT * FROM employee_stru;
+
+-- employee_stru, emp_id에 기본키 제약사항 추가
+ALTER TABLE employee_stru
+	ADD CONSTRAINT PRIMARY KEY(emp_id);
+DESC employee_stru;
+
+-- emp_id에 데이터 INSERT 작업 시 트리거가 실행되도록 생성
+-- "E0001" 형식으로 데이터 추가
+SELECT * FROM information_schema.triggers;
+
+/**************** TRIGGRER 시작 ******************/
+DELIMITER $$
+
+CREATE TRIGGER trg_employee_stru_emp_id
+BEFORE INSERT ON employee_stru
+FOR EACH ROW 
+BEGIN
+    DECLARE max_code INT;
+
+    -- 숫자 부분만 추출 (E0001 → 0001), 숫자로 캐스팅
+    SELECT IFNULL(MAX(CAST(SUBSTRING(emp_id, 2) AS UNSIGNED)), 0)
+    INTO max_code
+    FROM employee_stru;
+
+    SET NEW.emp_id = CONCAT('E', LPAD(max_code + 1, 4, '0'));
+END$$
+
+DELIMITER ;
+/**************** TRIGGRER 끝 ******************/
+
+DROP TRIGGER IF EXISTS trg_employee_stru_emp_id;
+
+INSERT INTO employee_stru(emp_name, eng_name, gender, hire_date, retire_date, dept_id, phone, email, salary)
+	values("홍길동", "hong", "m", "2020-10-10", curdate(), "SYS", "010-1234-3456", "hong@test.com", "6000");
+    
+DESC employee_stru;
+SELECT * FROM employee_stru;
+SELECT * FROM information_schema.triggers;
+
+-- 참조관계에 대한 트리거 생성 : 참조관계(부모(dept : dept_id) <----> 자식(emp : dept_id))
+SELECT * FROM dept;
+SELECT * FROM emp;
+
+-- ACC	회계	B	2015-04-01
+-- ADV	홍보	C	2015-06-01
+-- GEN	총무	B	2014-03-01
+-- HRD	인사	B	2013-05-01
+-- MKT	영업	C	2013-05-01
+-- SYS	정보시스템	A	2013-01-01
+
+-- ACC 부서 삭제
+DELETE FROM dept WHERE dept_id = "ACC"; -- emp의 고소해 사원이 참조중
+
+-- GEN
+DELETE FROM dept WHERE dept_id = "GEN"; -- 참조되지 않은 컬럼은 삭제 가능
+
+-- 정주고 사원 삭제
+DELETE FROM emp WHERE emp_id = "S0019";
+
+-- 1. 참조 관계 설정 시 ON DELETE CASCADE 
+-- 부모의 참조 컬럼이 삭제되면, 자식의 행이 함께 삭제됨
+-- 뉴스테이블의 기사 컬럼이 삭제되며, 댓글 테이블으 댓글이 함께 삭제
+-- 게시판의 게시글 삭제 시 게시글의 댓글이 함께 삭제
+CREATE TABLE board(
+	bid     int          PRIMARY KEY AUTO_INCREMENT,
+    title   varchar(100) NOT NULL,
+    content longtext,
+    bdate   datetime
+);
+
+CREATE TABLE reply(
+	rid     int          PRIMARY KEY AUTO_INCREMENT,
+    content varchar(100) NOT NULL,
+    bid     int          NOT NULL,
+    rdate   datetime,
+    CONSTRAINT fk_reply_bid FOREIGN KEY(bid)
+		REFERENCES board(bid) 
+        ON DELETE CASCADE -- bid가 삭제가 되면 참조키도 삭제됨 (변경도 같음)
+        ON UPDATE CASCADE
+);
+DESC board;
+DESC reply;
+
+SELECT * FROM board;
+INSERT INTO board(title, content, bdate)
+values("test", "test", curdate());
+
+SELECT * FROM reply;
+INSERT INTO reply(content, bid, rdate)
+values("reply test", 2, curdate());
+
+-- bid, 2 삭제
+DELETE FROM board WHERE bid = 2;
+SELECT * FROM board;
+SELECT * FROM reply;
+
+-- 2. 트리거를 사용하여 부모의 참조컬럼 삭제 시 자신의 참조 컬럼 데이터를 NULL로 
+-- **** 오라클 데이터베이스에서는 트리거 실행 가능
+-- **** innoDB 형식의 데이터베이스인 MYSQL, MARIA는 트리거 실행 불가능
+-- 이유는 innoDB형식은 트리거 실행 전 참조관계를 먼저 체크하여 에러 발생 시킴
+
+SELECT * FROM information_schema.triggers;
+
+/**************** TRIGGRER 시작 ******************/
+-- dept 테이블의 row 삭제 시 참조하는 emp 테이블의 dept_id에 NULL값 업데이트
+DELIMITER $$
+
+CREATE TRIGGER trg_dept_dept_id_delete
+AFTER DELETE ON dept -- 테이블명
+FOR EACH ROW 
+BEGIN
+-- 참조하는 emp 테이블의 dept_id에 NULL값 업데이트
+	UPDATE emp
+		SET dept_id = NULL
+        WHERE dept_id = old.dept_id; -- old.dept_id : dept 테이블에서 삭제된 dept_id
+END$$
+
+DELIMITER ;
+/**************** TRIGGRER 끝 ******************/
+
+SELECT * FROM information_schema.triggers;
+SELECT * FROM dept;
+SELECT * FROM emp;
+DESC dept;
+DESC emp;
+
+-- emp 테이블의 dept_id 컬럼 NULL 허용으로 변경
+ALTER TABLE emp
+	MODIFY COLUMN dept_id char(3) NULL;
+    
+-- dept 테이블의 ACC 부서 삭제
+SET sql_safe_updates = 0;
+DELETE FROM dept WHERE dept_id = "ACC";
+
+-- 사원 테이블의 급여 변경 시 로그 저장 :: 트리거 업데이트 이용
+SELECT * FROM information_schema.triggers;
+CREATE TABLE salary_log(
+	emp_id      char(5) PRIMARY KEY,
+    old_salary  int,
+    new_salary  int,
+    change_date date
+);
+
+DESC salary_log;
+
+/**************** TRIGGRER 시작 ******************/
+-- dept 테이블의 row 삭제 시 참조하는 emp 테이블의 dept_id에 NULL값 업데이트
+DELIMITER $$
+
+CREATE TRIGGER trg_salary_update
+AFTER UPDATE ON employee -- 테이블명
+FOR EACH ROW 
+BEGIN
+-- 사원 테이블의 급여 변경 시 로그 저장, old.salary(기존 급여), new.salary(새로운 급여)
+	if old.salary <> new.salary	then 
+		-- 로그 저장
+        INSERT INTO salary_log(emp_id, old_salary, new_salary, change_date)
+					values(old.emp_id, old.salary, new.salary, now()); -- old. 과 new. 으로 이전 데이터, 바뀐 데이터로 나눔
+    end if;
+END$$
+
+DELIMITER ;
+/**************** TRIGGRER 끝 ******************/
+
+SELECT * FROM information_schema.triggers;
+SELECT * FROM salary_log;
+SELECT * FROM employee;
+UPDATE employee SET salary = "8000"
+	WHERE emp_id = "S0020";
