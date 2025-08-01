@@ -87,3 +87,141 @@ DESC score_member;
 SELECT * FROM score_member;
 SELECT * FROM information_schema.triggers;
 
+
+/********************도서 관리 시스템***********************/
+
+-- private String id;
+-- private String name;
+-- private String author;
+-- private int price;
+
+-- 교육기관
+
+CREATE TABLE book_tj(
+	bid    char(4)     PRIMARY KEY,
+    btitle varchar(50) NOT NULL,
+    author varchar(10) ,
+    price  int,
+    isbn   int,
+    bdate  datetime
+);
+
+/**************** TRIGGRER 시작 ******************/
+DELIMITER $$
+
+CREATE TRIGGER trh_book_tj_bid
+BEFORE INSERT ON book_tj
+FOR EACH ROW 
+BEGIN
+    DECLARE max_code INT;
+
+    SELECT IFNULL(MAX(CAST(right(bid,3) AS UNSIGNED)), 0)
+    INTO max_code
+    FROM book_tj;
+
+    SET NEW.bid = CONCAT('B', LPAD((max_code + 1), 3, '0'));
+END$$
+
+DELIMITER ;
+/**************** TRIGGRER 끝 ******************/
+
+DESC book_tj;
+SELECT * FROM book_tj;
+SELECT * FROM information_schema.triggers;
+
+-- 교육기관 끝
+
+-- 예스24
+
+CREATE TABLE book_yes24(
+	bid    char(4)     PRIMARY KEY,
+    btitle varchar(50) NOT NULL,
+    author varchar(10),
+    price  int,
+    isbn   int,
+    bdate  datetime
+);
+
+/**************** TRIGGRER 시작 ******************/
+DELIMITER $$
+
+CREATE TRIGGER trh_book_yes24_bid
+BEFORE INSERT ON book_yes24
+FOR EACH ROW 
+BEGIN
+    DECLARE max_code INT;
+
+    SELECT IFNULL(MAX(CAST(right(bid, 3) AS UNSIGNED)), 0)
+    INTO max_code
+    FROM book_yes24;
+
+    SET NEW.bid = CONCAT('B', LPAD((max_code + 1), 3, '0'));
+END$$
+
+DELIMITER ;
+/**************** TRIGGRER 끝 ******************/
+
+DESC book_yes24;
+SELECT * FROM book_yes24;
+SELECT * FROM information_schema.triggers;
+
+-- 예스24 끝
+
+-- 알라딘
+
+CREATE TABLE book_aladin(
+	bid    char(4)     PRIMARY KEY,
+    btitle varchar(50) NOT NULL,
+    author varchar(10),
+    price  int,
+    isbn   int,
+    bdate  datetime
+);
+
+/**************** TRIGGRER 시작 ******************/
+DELIMITER $$
+
+CREATE TRIGGER trh_book_aladin_bid
+BEFORE INSERT ON book_aladin
+FOR EACH ROW 
+BEGIN
+    DECLARE max_code INT;
+
+    SELECT IFNULL(MAX(CAST(right(bid, 3) AS UNSIGNED)), 0)
+    INTO max_code
+    FROM book_aladin;
+
+    SET NEW.bid = CONCAT('B', LPAD((max_code + 1), 3, '0'));
+END$$
+
+DELIMITER ;
+/**************** TRIGGRER 끝 ******************/
+
+DESC book_aladin;
+SELECT * FROM book_aladin;
+SELECT * FROM information_schema.triggers;
+
+-- 알라딘 끝
+
+-- DROP TRIGGER IF EXISTS trh_book_tj_bid;
+-- DROP TRIGGER IF EXISTS trh_book_yes24_bid;
+-- DROP TRIGGER IF EXISTS trh_book_aladin_bid;
+
+-- DROP TABLE book_tj;
+-- DROP TABLE book_yes24;
+-- DROP TABLE book_aladin;
+
+INSERT INTO book_tj(btitle, author, price, isbn, bdate) 
+				             values ('연금술사', '파울로 코엘료', '1000', '1234', now());
+
+SELECT	bid, btitle, author, price, isbn, bdate 
+				 FROM book_tj
+				 WHERE bid = "b001";
+
+DESC book_tj;
+SELECT count(*) AS count FROM book_yes24;
+
+-- Connection 확인
+SHOW STATUS LIKE "Threads_connected";  -- 접속 커넥션 수
+SHOW PROCESSLIST;					   -- 활성중인 커넥션 (workbench도 하나의 커넥션이다.) (이클립스에서 main메소드 하나 실행할 때마다 커넥션 증가)
+SHOW VARIABLES LIKE "max_connections"; -- 최대 접속 가능 커넥션 수 (동시접속 가능한 수)
