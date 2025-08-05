@@ -313,9 +313,30 @@ SELECT * FROM book_market_member WHERE uid = 'hong' AND password = '1234';
 
 DELETE FROM book_market_cart WHERE uid = 'hong';
 
+UPDATE book_market_cart SET complete = '1', payment_date = now() WHERE order_id = 25;
+
 SET FOREIGN_KEY_CHECKS = 0;
 TRUNCATE TABLE book_market_cart;
 SET FOREIGN_KEY_CHECKS = 1;
+
+ALTER TABLE book_market_cart
+ADD COLUMN payment_date datetime;
+
+ALTER TABLE book_market_member
+ADD COLUMN name varchar(10) NOT NULL;
+ALTER TABLE book_market_member
+ADD COLUMN age int(4);
+ALTER TABLE book_market_member
+ADD COLUMN gender char(1);
+ALTER TABLE book_market_member
+ADD COLUMN address varchar(50);
+ALTER TABLE book_market_member
+ADD COLUMN phone varchar(20);
+
+ALTER TABLE book_market_cart
+ADD COLUMN pay int;
+ALTER TABLE book_market_cart
+ADD COLUMN `change` int;
 
 DESC book_market_books;
 SELECT * FROM book_market_books;
